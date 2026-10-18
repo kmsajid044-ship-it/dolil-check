@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>দলিল চেক · ড্যাশবোর্ড</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%232e3c93'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="description" content="দলিল চেক: জমির দলিল যাচাইয়ের প্রোটোটাইপ (LandTech 2026, টিম এন্ট্রপি)। সব তথ্য কাল্পনিক।">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&text=%E0%A7%A6%E0%A7%A7%E0%A7%A8%E0%A7%A9%E0%A7%AA%E0%A7%AB%E0%A7%AC%E0%A7%AD%E0%A7%AE%E0%A7%AF&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script>try{const t=localStorage.getItem("dolil-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+
+</head>
+<body>
+<main id="main"><div class="wrap">
+  <section class="hero">
+    <div class="enter">
+    <h1>জমির দলিল আসল কি না, এক স্ক্যানে জানুন</h1>
+    <p class="lead">প্রতিটি নিবন্ধিত দলিলে একটি স্বাক্ষরিত QR কোড থাকে। স্ক্যান করলে দেখা যায় দলিলটি আসল কি না, কেউ বদলেছে কি না, আর এটিই সর্বশেষ হস্তান্তর কি না। একই জমি দ্বিতীয়বার বিক্রির চেষ্টা নিবন্ধনের সময়ই আটকে যায়।</p>
+    <form class="quick" id="quick" action="/v" autocomplete="off">
+      <input id="q" name="deed" aria-label="দলিল নং বা QR-এর লেখা" placeholder="দলিল নং, যেমন SRO-NDP-2026-00227" required>
+      <button type="submit">যাচাই করুন</button>
+    </form>
+    </div>
+    <!-- Decorative 3D deed: a sheet, a floating QR and the seal stamp on separate depth layers. -->
+    <div class="scene" aria-hidden="true">
+      <div class="deed3d" id="deed3d">
+        <div class="shadow"></div>
+        <div class="under"></div>
+        <div class="sheet"><i class="t"></i><i></i><i class="s"></i><i></i><i class="xs"></i><i></i><i class="s"></i></div>
+        <div class="qr3d"><svg viewBox="0 0 21 21" shape-rendering="crispEdges"><path fill="#1a2438" d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM14 0h7v7h-7zM15 1v5h5V1zM16 2h3v3h-3zM0 14h7v7H0zM1 15v5h5v-5zM2 16h3v3H2zM9 0h2v2H9zM9 3h1v3H9zM11 4h2v1h-2zM8 8h3v1H8zM12 8h2v2h-2zM16 9h2v1h-2zM19 8h2v3h-2zM8 11h1v3H8zM10 10h2v2h-2zM14 12h3v1h-3zM18 13h3v2h-3zM9 15h3v1H9zM13 15h1v3h-1zM15 16h2v2h-2zM18 17h1v4h-1zM9 18h3v3H9zM14 19h3v2h-3zM20 19h1v2h-1z"/></svg></div>
+        <div class="seal3d">আসল<small>সর্বশেষ হস্তান্তর</small></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="figures" data-reveal>
+    <div><b id="t-deeds">…</b><span>সিল করা দলিল</span></div>
+    <div><b id="t-log">…</b><span>পাবলিক লগের এন্ট্রি</span></div>
+    <div class="bad"><b id="t-blocked">…</b><span>আটকানো জালিয়াতির চেষ্টা</span></div>
+    <div class="warn"><b id="t-overdue">…</b><span>নামজারি বাকি, <span id="t-days">৬০</span> দিনের বেশি</span></div>
+  </div>
+
+  <section class="section" data-reveal>
+  <h2>কোন অফিস থেকে কাজ করছেন?</h2>
+  <ul class="roles">
+    <li><a href="/register"><b>সাব-রেজিস্ট্রি অফিস</b><span>বিক্রেতার অংশ মিলিয়ে দলিল সিল করুন, QR-সহ সনদ প্রিন্ট করুন।</span></a></li>
+    <li><a href="/mutation"><b>এসি ল্যান্ড অফিস</b><span>দলিলের সাথে যুক্ত করে নামজারি সিল করুন, বাকি নামজারির তালিকা দেখুন।</span></a></li>
+    <li><a href="/v"><b>ক্রেতা, ব্যাংক বা আদালত</b><span>QR স্ক্যান বা দলিলের ফাইল দিয়ে কয়েক সেকেন্ডে যাচাই করুন।</span></a></li>
+  </ul>
+  </section>
+
+  <div class="columns section">
+    <section class="card" data-reveal>
+      <h2>সম্প্রতি আটকানো চেষ্টা</h2>
+      <table id="rej"><tr><th>সময়</th><th>ধরন</th><th>বিবরণ</th></tr></table>
+    </section>
+    <section class="card" data-reveal>
+      <h2>নামজারি বাকি থাকা দলিল</h2>
+      <table id="overdue"><tr><th>দলিল নং</th><th>বাকি</th><th>জমি</th></tr></table>
+      <p class="muted" id="overdue-more"></p>
+    </section>
+  </div>
+
+  <section class="section card" data-reveal>
+    <h2>পাবলিক লগ</h2>
+    <div class="sth"><span class="size" id="sth-size"></span><span>টি এন্ট্রি আছে সর্বশেষ স্বাক্ষরিত ট্রি হেডে। এর রুট হ্যাশ:</span></div>
+    <p class="mono" id="sth-root"></p>
+    <p class="muted" style="margin-bottom:0">এই রুট হ্যাশ প্রতিদিন বাইরে প্রকাশ হলে অফিস নিজেও গোপনে পুরোনো রেকর্ড বদলাতে পারে না।</p>
+  </section>
+</div></main>
+<script src="/static/app.js"></script>
+<script>
+renderHeader("home");
+const CODE_BN = { DOUBLE_SALE: ["দ্বিতীয় বিক্রি", "bad"], OVER_SHARE: ["অংশের বেশি বিক্রি", "bad"], NOT_OWNER: ["মালিক নন", "bad"],
+  UNKNOWN_DEED: ["দলিলহীন নামজারি", "warn"], ALREADY_MUTATED: ["দ্বিতীয় নামজারি", "warn"] };
+const today = new Date().toISOString().slice(0, 10);
+// The hero deed tilts toward the pointer (skipped when the user prefers reduced motion).
+if (!REDUCED) {
+  const d = $("#deed3d");
+  addEventListener("pointermove", (e) => {
+    d.classList.add("tracking");
+    d.style.setProperty("--ry", `${-22 + (e.clientX / innerWidth - 0.5) * 24}deg`);
+    d.style.setProperty("--rx", `${14 - (e.clientY / innerHeight - 0.5) * 16}deg`);
+  });
+}
+// A pasted QR text goes as ?q=, a typed deed number as ?deed= (the verify page accepts both).
+$("#quick").onsubmit = (e) => {
+  e.preventDefault();
+  const v = $("#q").value.trim();
+  location.href = "/v?" + (v.includes("|") || v.startsWith("http") ? "q=" : "deed=") + encodeURIComponent(v);
+};
+(async () => {
+  const [s, rej, flags, sth] = await Promise.all([api(`/stats?as_of=${today}`), api("/rejections?limit=40"), api(`/flags?as_of=${today}`), api("/log/sth")]);
+  countUp($("#t-deeds"), s.data.deeds);
+  countUp($("#t-log"), s.data.log_size);
+  countUp($("#t-blocked"), s.data.blocked);
+  countUp($("#t-overdue"), s.data.mutation_overdue);
+  $("#t-days").textContent = bn(flags.data.threshold_days);
+  const rows = rej.data.filter((r) => CODE_BN[r.code]).slice(0, 8);
+  $("#rej").insertAdjacentHTML("beforeend", rows.length ? rows.map((r) => {
+    const [t, c] = CODE_BN[r.code];
+    return `<tr><td>${bn(r.at.slice(0, 16).replace("T", " "))}</td><td><span class="pill ${c}">${t}</span></td><td>${esc(r.message)}</td></tr>`;
+  }).join("") : `<tr><td colspan="3" class="muted">এখনো কোনো চেষ্টা নেই</td></tr>`);
+  const od = flags.data.mutation_overdue.sort((a, b) => b.days_pending - a.days_pending);
+  $("#overdue").insertAdjacentHTML("beforeend", od.slice(0, 8).map((f) =>
+    `<tr><td><a class="mono" href="/v?deed=${encodeURIComponent(f.deed_id)}">${esc(f.deed_id)}</a></td><td>${bn(f.days_pending)} দিন</td><td>${esc(plotLabel(f.plot_id))}</td></tr>`).join(""));
+  if (od.length > 8) $("#overdue-more").textContent = `আরও ${bn(od.length - 8)}টি`;
+  countUp($("#sth-size"), sth.data.tree_size);
+  $("#sth-root").textContent = sth.data.root_hex;
+})();
+</script>
+</body>
+</html>

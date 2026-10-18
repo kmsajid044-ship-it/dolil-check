@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>দলিল চেক · নামজারি</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%232e3c93'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="description" content="দলিল চেক: জমির দলিল যাচাইয়ের প্রোটোটাইপ (LandTech 2026, টিম এন্ট্রপি)। সব তথ্য কাল্পনিক।">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&text=%E0%A7%A6%E0%A7%A7%E0%A7%A8%E0%A7%A9%E0%A7%AA%E0%A7%AB%E0%A7%AC%E0%A7%AD%E0%A7%AE%E0%A7%AF&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script>try{const t=localStorage.getItem("dolil-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+
+</head>
+<body>
+<main id="main"><div class="wrap">
+  <header class="pagehead"><div class="enter">
+    <div class="office">এসি ল্যান্ড অফিস, ACL-NDP (কাল্পনিক)</div>
+    <h1>নামজারি এন্ট্রি</h1>
+    <p class="lead">নামজারি শুধু নিবন্ধিত দলিলের জন্যই হয়। প্রতিটি নামজারি দলিলের হ্যাশের সাথে যুক্ত হয়ে সিল হয়।</p>
+  </div></header>
+
+  <form id="f" class="card" autocomplete="off">
+    <div class="row">
+      <div class="field"><label for="deed">দলিল নং</label><input id="deed" class="mono" placeholder="SRO-NDP-2026-00001" required></div>
+      <div class="field"><label for="case">নামজারি কেস নং</label><input id="case" required></div>
+      <div class="field"><label for="date">তারিখ</label><input id="date" type="date" required></div>
+    </div>
+    <div class="buttons"><button type="submit" id="go">নামজারি সিল করুন</button></div>
+  </form>
+  <div id="out"></div>
+
+  <section class="section" data-reveal><h2>নামজারি বাকি, <span id="days"></span> দিনের বেশি</h2>
+  <div class="card"><table id="overdue"><tr><th>দলিল নং</th><th>নিবন্ধন</th><th>বাকি</th><th>জমি</th><th></th></tr></table>
+    <p class="muted" id="overdue-more" style="margin-bottom:0"></p></div></section>
+
+  <section class="section" data-reveal><h2>বাতিল হওয়া নামজারি</h2>
+  <p class="muted" style="margin-top:-8px">দলিল নেই, বা আগেই নামজারি হয়েছে।</p>
+  <div class="card"><table id="refused"><tr><th>সময়</th><th>বিবরণ</th></tr></table></div></section>
+</div></main>
+<script src="/static/app.js"></script>
+<script>
+renderHeader("mutation");
+const today = new Date().toISOString().slice(0, 10);
+$("#date").value = today;
+// A fresh case number each time; real case numbers come from the AC Land office's own register.
+const newCase = () => `${Math.floor(1000 + Math.random() * 8999)}/${today.slice(0, 4)}`;
+$("#case").value = newCase();
+
+// Pre-fill from /mutation?deed=... (links on the dashboard and in the list below)
+const qs = new URLSearchParams(location.search);
+if (qs.get("deed")) $("#deed").value = qs.get("deed");
+
+$("#f").onsubmit = async (e) => {
+  e.preventDefault();
+  $("#go").disabled = true;
+  const r = await api("/mutations", { office_id: "ACL-NDP", deed_id: $("#deed").value.trim(),
+                                      case_no: $("#case").value.trim(), date: $("#date").value });
+  $("#go").disabled = false;
+  const out = $("#out");
+  if (!r.ok) renderError(out, r.data);
+  else out.innerHTML = stampHtml("good", "নামজারি", "সিল হয়েছে", `
+      <p class="bn">নামজারি সিল হয়েছে</p>
+      <p class="en"><span class="mono">${esc(r.data.mutation_id)}</span>, পাবলিক লগের এন্ট্রি #${bn(r.data.leaf_index)}</p>
+      <p><a href="/v?deed=${encodeURIComponent($("#deed").value.trim())}">দলিলটি যাচাই করে দেখুন</a></p>`);
+  $("#case").value = newCase();
+  out.scrollIntoView({ behavior: "smooth" });
+  load();
+};
+
+async function load() {
+  const flags = (await api(`/flags?as_of=${today}`)).data;
+  $("#days").textContent = bn(flags.threshold_days);
+  const od = flags.mutation_overdue.sort((a, b) => b.days_pending - a.days_pending);
+  const t = $("#overdue");
+  t.querySelectorAll("tr:not(:first-child)").forEach((tr) => tr.remove());
+  t.insertAdjacentHTML("beforeend", od.slice(0, 15).map((f) =>
+    `<tr><td><a class="mono" href="/v?deed=${encodeURIComponent(f.deed_id)}">${esc(f.deed_id)}</a></td><td>${bn(f.reg_date)}</td>
+     <td>${bn(f.days_pending)} দিন</td><td>${esc(plotLabel(f.plot_id))}</td>
+     <td><a href="/mutation?deed=${encodeURIComponent(f.deed_id)}">নামজারি করুন</a></td></tr>`).join(""));
+  $("#overdue-more").textContent = od.length > 15 ? `আরও ${bn(od.length - 15)}টি` : "";
+  const r = $("#refused");
+  r.querySelectorAll("tr:not(:first-child)").forEach((tr) => tr.remove());
+  r.insertAdjacentHTML("beforeend", flags.refused_mutations.length ? flags.refused_mutations.slice(0, 10).map((x) =>
+    `<tr><td>${bn(x.at.slice(0, 16).replace("T", " "))}</td><td><span class="pill warn">${esc(ERROR_BN[x.code] || x.code)}</span> ${esc(x.message)}</td></tr>`).join("")
+    : `<tr><td colspan="2" class="muted">কিছু নেই</td></tr>`);
+}
+load();
+</script>
+</body>
+</html>

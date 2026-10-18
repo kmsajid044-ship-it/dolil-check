@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>দলিল চেক · দলিল নিবন্ধন</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%232e3c93'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="description" content="দলিল চেক: জমির দলিল যাচাইয়ের প্রোটোটাইপ (LandTech 2026, টিম এন্ট্রপি)। সব তথ্য কাল্পনিক।">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&text=%E0%A7%A6%E0%A7%A7%E0%A7%A8%E0%A7%A9%E0%A7%AA%E0%A7%AB%E0%A7%AC%E0%A7%AD%E0%A7%AE%E0%A7%AF&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script>try{const t=localStorage.getItem("dolil-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+
+</head>
+<body>
+<main id="main"><div class="wrap">
+  <header class="pagehead"><div class="enter">
+    <div class="office">সাব-রেজিস্ট্রি অফিস, SRO-NDP (কাল্পনিক)</div>
+    <h1>দলিল নিবন্ধন ও সিল</h1>
+    <p class="lead">বিক্রেতার বর্তমান অংশ মিলিয়ে দলিল সিল হয়। বেশি জমি বা আগেই বিক্রি করা জমি নিবন্ধন হয় না।</p>
+  </div></header>
+
+  <form id="f" class="steps" autocomplete="off">
+    <fieldset><legend>জমি</legend>
+      <div class="row">
+        <div class="field"><label for="mouza">মৌজা</label><select id="mouza" required></select></div>
+        <div class="field"><label for="dag">দাগ নং</label><select id="dag" required></select></div>
+        <div class="field"><label for="khatian">খতিয়ান নং</label><input id="khatian" value="১" required></div>
+      </div>
+      <p class="hint" id="plot-info"></p>
+    </fieldset>
+
+    <fieldset><legend>বিক্রেতা</legend>
+      <div class="row">
+        <div class="field"><label for="seller">বর্তমান মালিকদের মধ্যে থেকে</label><select id="seller" required></select></div>
+        <div class="field"><label for="area">বিক্রির পরিমাণ (শতাংশ)</label><input id="area" inputmode="decimal" required>
+          <div class="hint" id="held"></div></div>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>ক্রেতা</legend>
+      <div class="row">
+        <div class="field"><label for="bname">নাম</label><input id="bname" placeholder="যেমন: করিম মিয়া" required></div>
+        <div class="field"><label for="bid">পরিচয় নং (কাল্পনিক)</label><input id="bid" required></div>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>দলিল</legend>
+      <div class="row">
+        <div class="field"><label for="date">নিবন্ধনের তারিখ</label><input id="date" type="date" required></div>
+        <div class="field"><label for="price">মূল্য (টাকা)</label><input id="price" inputmode="numeric" value="1500000" required></div>
+      </div>
+      <div class="field"><label for="doc">স্ক্যান করা দলিল (PDF, ঐচ্ছিক)</label><input id="doc" type="file" accept="application/pdf,image/*">
+        <div class="hint">ফাইলের ফিঙ্গারপ্রিন্ট (SHA-256) দলিলের সাথে সিল হয়। পরে একটি অক্ষর বদলালেও যাচাইয়ে ধরা পড়বে।</div></div>
+    </fieldset>
+
+    <div class="buttons"><button type="submit" id="go">দলিল সিল করুন</button></div>
+  </form>
+
+  <div id="out"></div>
+</div></main>
+<script src="/static/app.js"></script>
+<script>
+renderHeader("register");
+let plots = [], holders = [], last = null;
+const newId = () => "P-" + String(Math.floor(10000 + Math.random() * 89999));
+$("#bid").value = newId();
+$("#date").value = new Date().toISOString().slice(0, 10);
+const toAscii = (s) => String(s).replace(/[০-৯]/g, (d) => "০১২৩৪৫৬৭৮৯".indexOf(d));
+
+function fillDags() {
+  const m = $("#mouza").value;
+  $("#dag").innerHTML = plots.filter((p) => p.mouza === m).map((p) => `<option value="${esc(p.plot_id)}">দাগ ${bn(p.dag_no)}</option>`).join("");
+  loadHolders();
+}
+
+async function loadHolders() {
+  const pid = $("#dag").value;
+  const r = await api("/plots?plot_id=" + encodeURIComponent(pid));
+  if (!r.ok) return;
+  holders = r.data.current_holders;
+  $("#plot-info").textContent = `মোট ${bn(r.data.total_area)} শতাংশ · জেএল ${bn(r.data.jl_no)} · ${r.data.survey} · ${bn(r.data.history.length)}টি রেকর্ড`;
+  $("#seller").innerHTML = holders.map((h, i) => `<option value="${i}">${esc(h.name)} (${esc(h.party_id)}) · ${bn(h.area)} শতাংশ</option>`).join("");
+  pickSeller();
+}
+
+function pickSeller() {
+  const h = holders[$("#seller").value];
+  if (!h) return;
+  $("#area").value = h.area;
+  $("#held").textContent = `এই বিক্রেতার আছে ${bn(h.area)} শতাংশ`;
+}
+
+function payload(buyer) {
+  const plot = plots.find((p) => p.plot_id === $("#dag").value);
+  const h = holders[$("#seller").value];
+  const area = toAscii($("#area").value).trim();
+  return {
+    office_id: "SRO-NDP", reg_date: $("#date").value, khatian_no: toAscii($("#khatian").value),
+    plot: { mouza: plot.mouza, jl_no: plot.jl_no, survey: plot.survey, dag_no: plot.dag_no },
+    sellers: [{ party_id: h.party_id, name: h.name, area }],
+    buyers: [{ party_id: buyer.id, name: buyer.name, area }],
+    consideration_bdt: Number(toAscii($("#price").value).replace(/[^0-9]/g, "")),
+  };
+}
+
+async function submit(body) {
+  $("#go").disabled = true;
+  const r = await api("/deeds", body);
+  $("#go").disabled = false;
+  return r;
+}
+
+$("#mouza").onchange = fillDags;
+$("#dag").onchange = loadHolders;
+$("#seller").onchange = pickSeller;
+
+$("#f").onsubmit = async (e) => {
+  e.preventDefault();
+  const body = payload({ id: $("#bid").value.trim(), name: $("#bname").value.trim() });
+  const file = $("#doc").files[0];
+  if (file) body.document_b64 = await fileToBase64(file);
+  const r = await submit(body);
+  const out = $("#out");
+  if (!r.ok) { renderError(out, r.data); out.scrollIntoView({ behavior: "smooth" }); return; }
+  last = { body: { ...body, document_b64: undefined }, deed: r.data };
+  const id = r.data.deed_id;
+  out.innerHTML = stampHtml("good", "সিল", "দলিল নিবন্ধিত", `
+      <p class="bn">দলিল সিল হয়েছে</p>
+      <p class="en">পাবলিক লগের এন্ট্রি #${bn(r.data.leaf_index)}। ${r.data.doc_sha256 ? "দলিলের ফাইলও সিল হয়েছে।" : "কোনো ফাইল দেওয়া হয়নি।"}</p>`) + `
+    <div class="split card">
+      <div><table>
+        <tr><th>দলিল নং</th><td class="mono">${esc(id)}</td></tr>
+        <tr><th>রেকর্ড হ্যাশ</th><td class="mono">${esc(r.data.record_hash)}</td></tr>
+      </table>
+      <div class="buttons">
+        <a class="btn" href="/deed?id=${encodeURIComponent(id)}" target="_blank">সনদ প্রিন্ট করুন</a>
+        <a class="btn ghost" href="/v?deed=${encodeURIComponent(id)}">এখনই যাচাই করুন</a>
+        <button type="button" class="danger" id="again">একই জমি আবার বিক্রির চেষ্টা (ডেমো)</button>
+      </div></div>
+      <div class="qr"><img src="/deeds/${encodeURIComponent(id)}/qr.png" alt="দলিল ${esc(id)}-এর QR কোড"></div>
+    </div><div id="again-out"></div>`;
+  $("#again").onclick = async () => {
+    const r2 = await submit({ ...last.body, buyers: [{ ...last.body.buyers[0], party_id: newId(), name: "জব্বার আলী" }] });
+    if (!r2.ok) renderError($("#again-out"), r2.data);
+    else $("#again-out").innerHTML = `<p>দ্বিতীয় দলিল সিল হয়েছে: ${esc(r2.data.deed_id)} (বিক্রেতার আরও জমি ছিল)</p>`;
+    $("#again-out").scrollIntoView({ behavior: "smooth" });
+  };
+  $("#bid").value = newId();
+  $("#bname").value = "";
+  await loadHolders();
+  out.scrollIntoView({ behavior: "smooth" });
+};
+
+(async () => {
+  plots = (await api("/plots/all")).data;
+  const mouzas = [...new Set(plots.map((p) => p.mouza))];
+  $("#mouza").innerHTML = mouzas.map((m) => `<option>${esc(m)}</option>`).join("");
+  fillDags();
+})();
+</script>
+</body>
+</html>

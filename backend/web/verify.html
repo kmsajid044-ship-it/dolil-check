@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>দলিল চেক · যাচাই</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%232e3c93'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="description" content="দলিল চেক: জমির দলিল যাচাইয়ের প্রোটোটাইপ (LandTech 2026, টিম এন্ট্রপি)। সব তথ্য কাল্পনিক।">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&text=%E0%A7%A6%E0%A7%A7%E0%A7%A8%E0%A7%A9%E0%A7%AA%E0%A7%AB%E0%A7%AC%E0%A7%AD%E0%A7%AE%E0%A7%AF&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script>try{const t=localStorage.getItem("dolil-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+
+</head>
+<body>
+<main id="main"><div class="wrap">
+  <header class="pagehead"><div class="enter">
+    <div class="office">ক্রেতা, ব্যাংক ও আদালতের জন্য</div>
+    <h1>দলিল যাচাই</h1>
+    <p class="lead">ফোনের ক্যামেরায় দলিলের QR স্ক্যান করলে এই পাতা নিজেই খোলে। দলিলের ফাইল দিলে মিলিয়ে দেখা হয়, একটি অক্ষর বদলালেও ধরা পড়ে।</p>
+  </div></header>
+
+  <form id="f" class="card scanpanel">
+    <div class="field"><label for="code">QR কোডের লেখা, লিংক, বা দলিল নং</label>
+      <textarea id="code" placeholder="DS1|SRO-NDP-2026-00227|…  অথবা  SRO-NDP-2026-00227"></textarea>
+      <div class="buttons noprint" id="scan-row">
+        <button type="button" class="ghost hidden" id="cam-btn">ক্যামেরায় QR স্ক্যান</button>
+        <label class="btn ghost hidden" id="img-btn" style="margin:0">QR-এর ছবি থেকে<input type="file" accept="image/*" id="img" hidden></label>
+      </div>
+      <video id="cam" class="hidden" playsinline muted></video>
+    </div>
+    <div class="field"><label for="doc">দলিলের ফাইল (ঐচ্ছিক)</label><input id="doc" type="file" accept="application/pdf,image/*">
+      <div class="hint">ফাইলটি এই ব্রাউজার থেকে সার্ভারে যায় শুধু ফিঙ্গারপ্রিন্ট মেলানোর জন্য; সংরক্ষণ করা হয় না।</div></div>
+    <div class="buttons"><button type="submit" id="go">যাচাই করুন</button></div>
+  </form>
+
+  <div id="out"></div>
+</div></main>
+<script src="/static/app.js"></script>
+<script>
+renderHeader("verify");
+const params = new URLSearchParams(location.search);
+if (params.get("q")) $("#code").value = params.get("q");
+else if (params.get("deed")) $("#code").value = params.get("deed");
+
+async function run() {
+  const code = $("#code").value.trim();
+  if (!code) return;
+  const body = code.includes("|") || code.startsWith("http") ? { qr: code } : { deed_id: code };
+  const file = $("#doc").files[0];
+  if (file) body.document_b64 = await fileToBase64(file);
+  $("#go").disabled = true;
+  $("#f").classList.add("busy");
+  $("#out").innerHTML = `<p class="muted" role="status">যাচাই হচ্ছে…</p>`;
+  const r = await api("/verify", body);
+  // keep the sweep visible for a moment so the check reads as something that happened
+  await new Promise((ok) => setTimeout(ok, REDUCED ? 0 : 450));
+  $("#f").classList.remove("busy");
+  $("#go").disabled = false;
+  if (r.data.verdict) renderVerdict($("#out"), r.data);
+  else renderError($("#out"), r.data);
+  $("#out").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("#f").onsubmit = (e) => { e.preventDefault(); run(); };
+$("#doc").onchange = () => { if ($("#code").value.trim()) run(); };
+
+// QR scanning where the browser supports it (Chrome, Edge, Android). Elsewhere, the phone camera app opens /v?q=… directly.
+if ("BarcodeDetector" in window) {
+  const detector = new BarcodeDetector({ formats: ["qr_code"] });
+  $("#cam-btn").classList.remove("hidden");
+  $("#img-btn").classList.remove("hidden");
+  $("#img").onchange = async () => {
+    const f = $("#img").files[0];
+    if (!f) return;
+    const codes = await detector.detect(await createImageBitmap(f)).catch(() => []);
+    if (codes.length) { $("#code").value = codes[0].rawValue; run(); }
+    else $("#out").innerHTML = `<p class="muted">ছবিতে QR কোড পাওয়া যায়নি।</p>`;
+  };
+  $("#cam-btn").onclick = async () => {
+    const video = $("#cam");
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); }
+    catch { $("#out").innerHTML = `<p class="muted">ক্যামেরা চালু করা যায়নি।</p>`; return; }
+    video.srcObject = stream; video.classList.remove("hidden"); await video.play();
+    const tick = async () => {
+      const codes = await detector.detect(video).catch(() => []);
+      if (codes.length) {
+        stream.getTracks().forEach((t) => t.stop()); video.classList.add("hidden");
+        $("#code").value = codes[0].rawValue; run();
+      } else requestAnimationFrame(tick);
+    };
+    tick();
+  };
+}
+if ($("#code").value) run();
+</script>
+</body>
+</html>

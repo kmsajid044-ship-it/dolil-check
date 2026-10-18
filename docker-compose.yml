@@ -1,0 +1,10 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - dolil-data:/srv/data/runtime
+
+volumes:
+  dolil-data:
