@@ -9,10 +9,13 @@ const SEAL_ICON = `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" st
   <circle cx="16" cy="13" r="9"/><path d="M11 13l3.5 3.5L21 10"/><path d="M11 21l-2 8 7-3 7 3-2-8"/></svg>`;
 
 function renderHeader(active) {
-  const links = [["/", "home", "ড্যাশবোর্ড"], ["/register", "register", "দলিল নিবন্ধন"], ["/mutation", "mutation", "নামজারি"], ["/v", "verify", "যাচাই"], ["/guide", "guide", "গাইড"]];
+  const links = [["/", "home", "ড্যাশবোর্ড"], ["/register", "register", "দলিল নিবন্ধন"], ["/mutation", "mutation", "নামজারি"], ["/v", "verify", "যাচাই"], ["/guide", "guide", "গাইড"], ["/admin/login", "admin", "ডেমো অ্যাডমিন"]];
   document.body.insertAdjacentHTML("afterbegin", `
     <a class="skip" href="#main">মূল অংশে যান</a>
-    <div class="sample">প্রোটোটাইপ: সব তথ্য কাল্পনিক, এটি কোনো সরকারি সেবা নয়। LandTech 2026, টিম এন্ট্রপি।</div>
+    <div class="sample"><b>প্রতিযোগিতার ডেমো — কৃত্রিম তথ্য। সার্ভিস পুনরায় চালু হলে পরিবর্তন মুছে যেতে পারে।</b><br>
+      Competition demo — synthetic data. Changes may reset when the service restarts.<br>
+      <small>এটি সরকারি সেবা নয়। / This is not an official government service.<br>
+      আগের instance থেকে ডাউনলোড করা রেকর্ড নতুন instance-এ যাচাই নাও হতে পারে। / Records downloaded from an earlier instance may not verify after reinitialization.</small></div>
     <header class="top"><div class="wrap">
       <a class="brand" href="/">${SEAL_ICON}<span>দলিল চেক</span></a>
       <div class="tools">
@@ -81,6 +84,13 @@ function countUp(el, n) {
 
 async function api(path, body) {
   const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const protectedPaths = new Set(["/offices", "/baselines", "/deeds", "/mutations", "/admin/logout"]);
+  if (body !== undefined && protectedPaths.has(path)) {
+    const status = await fetch("/admin/status", { credentials: "same-origin" });
+    const auth = await status.json();
+    if (auth.authenticated && auth.csrf) opts.headers["X-CSRF-Token"] = auth.csrf;
+  }
+  opts.credentials = "same-origin";
   const res = await fetch(path, opts);
   let data;
   try { data = await res.json(); } catch { data = { error: "BAD_RESPONSE", message: `HTTP ${res.status}` }; }
@@ -97,6 +107,10 @@ function fileToBase64(file) {
 }
 
 const ERROR_BN = {
+  AUTH_REQUIRED: "এই কাজটি শুধু ডেমো অ্যাডমিন করতে পারেন",
+  AUTH_UNAVAILABLE: "ডেমো অ্যাডমিন লগইন কনফিগার করা হয়নি",
+  BAD_CREDENTIALS: "ডেমো অ্যাডমিন পাসওয়ার্ড সঠিক নয়",
+  CSRF_FAILED: "নিরাপত্তা টোকেন মেলেনি; আবার লগইন করুন",
   DOUBLE_SALE: "দ্বিতীয় বিক্রি আটকানো হয়েছে: বিক্রেতা এই জমি আগেই বিক্রি করেছেন",
   OVER_SHARE: "বিক্রেতার অংশের চেয়ে বেশি জমি বিক্রির চেষ্টা আটকানো হয়েছে",
   NOT_OWNER: "বিক্রেতা এই জমির মালিক নন",
@@ -187,6 +201,7 @@ function renderError(el, data) {
   if (d.earlier_sale) extra += `<p>আগের বিক্রির দলিল: <a class="mono" href="/v?deed=${encodeURIComponent(d.earlier_sale)}">${esc(d.earlier_sale)}</a></p>`;
   if (d.holds && d.tried_to_sell) extra += `<p>বিক্রেতার আছে ${areaBn(d.holds)}, বিক্রি করতে চেয়েছেন ${areaBn(d.tried_to_sell)}।</p>`;
   if (d.current_holders?.length) extra += `<p class="muted">বর্তমান মালিক: ${d.current_holders.map((h) => `${esc(h.name)} (${areaBn(h.area)})`).join(", ")}</p>`;
+  if (data.login_url) extra += `<p><a class="btn ghost" href="${esc(data.login_url)}">ডেমো অ্যাডমিন লগইন</a></p>`;
   el.innerHTML = stampHtml("bad", "বাতিল", "সিল করা হয়নি",
     `<p class="bn">${esc(ERROR_BN[data.error] || "অনুরোধটি বাতিল হয়েছে")}</p>
      <p class="en">${esc(data.error || "")}: ${esc(data.message || "")}</p>${extra}`);
@@ -203,7 +218,7 @@ const EN = {
   // shell
   "প্রোটোটাইপ: সব তথ্য কাল্পনিক, এটি কোনো সরকারি সেবা নয়। LandTech 2026, টিম এন্ট্রপি।": "Prototype: all data is fictional and this is not a government service. LandTech 2026, Team Entropy.",
   "মূল অংশে যান": "Skip to content", "দলিল চেক": "Dolil Check", "ড্যাশবোর্ড": "Dashboard", "দলিল নিবন্ধন": "Register deed",
-  "নামজারি": "Mutation", "যাচাই": "Verify", "আলো মোডে যান": "Switch to light mode", "অন্ধকার মোডে যান": "Switch to dark mode",
+  "নামজারি": "Mutation", "যাচাই": "Verify", "ডেমো অ্যাডমিন": "Demo admin", "আলো মোডে যান": "Switch to light mode", "অন্ধকার মোডে যান": "Switch to dark mode",
   "LandTech 2026 প্রোটোটাইপ, টিম এন্ট্রপি। সব নাম, জমি ও দলিল কাল্পনিক।": "LandTech 2026 prototype, Team Entropy. All names, land and deeds are fictional.",
   "Ed25519 স্বাক্ষর, SHA-256 হ্যাশ ও RFC 6962 মার্কেল লগ": "Ed25519 signatures, SHA-256 hashes and an RFC 6962 Merkle log",
   // guide
@@ -303,6 +318,11 @@ const EN = {
   "পরিবর্তিত": "Altered", "এই কপি বদলানো": "this copy was changed", "অবৈধ": "Invalid", "নিবন্ধিত দলিল নয়": "not a registered deed",
   "বাতিল": "Refused", "সিল করা হয়নি": "nothing was sealed", "সিল": "Sealed", "দলিল নিবন্ধিত": "deed registered", "সিল হয়েছে": "sealed",
   "অনুরোধটি বাতিল হয়েছে": "The request was refused",
+  "এই কাজটি শুধু ডেমো অ্যাডমিন করতে পারেন": "Only the demo administrator can make this change",
+  "ডেমো অ্যাডমিন লগইন কনফিগার করা হয়নি": "Demo administrator login is not configured",
+  "ডেমো অ্যাডমিন পাসওয়ার্ড সঠিক নয়": "The demo administrator password is incorrect",
+  "নিরাপত্তা টোকেন মেলেনি; আবার লগইন করুন": "Security token mismatch; sign in again",
+  "ডেমো অ্যাডমিন লগইন": "Demo admin sign in",
   "দ্বিতীয় বিক্রি আটকানো হয়েছে: বিক্রেতা এই জমি আগেই বিক্রি করেছেন": "Second sale blocked: the seller already sold this land",
   "বিক্রেতার অংশের চেয়ে বেশি জমি বিক্রির চেষ্টা আটকানো হয়েছে": "Blocked: the seller tried to sell more than they hold",
   "বিক্রেতা এই জমির মালিক নন": "The seller does not own this land", "এই জমি নিবন্ধনে নেই": "This land is not in the registry",

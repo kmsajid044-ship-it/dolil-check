@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: dolil-check
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    envVars:
+      - key: DOLIL_DATA
+        value: /tmp/dolil-check-runtime
+      - key: DOLIL_ADMIN_PASSWORD
+        sync: false
+      - key: DOLIL_SESSION_SECRET
+        generateValue: true

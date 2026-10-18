@@ -12,12 +12,13 @@ import binascii
 import io
 import json
 import os
+import secrets
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
@@ -26,6 +27,7 @@ from starlette.staticfiles import StaticFiles
 from . import __version__
 from .config import DATA_DIR, DEFAULT_OFFICES
 from .registry import MUTATION_DEADLINE_DAYS, Registry, Rejected
+from .runtime import initialize_runtime
 
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 
@@ -34,6 +36,11 @@ STATUS = {
     "WRONG_OFFICE": 403, "DOUBLE_SALE": 409, "OVER_SHARE": 409, "NOT_OWNER": 409,
     "ALREADY_BASELINED": 409, "ALREADY_MUTATED": 409,
 }
+
+
+class DemoAuthError(Exception):
+    def __init__(self, code: str, message: str, status: int):
+        self.code, self.message, self.status = code, message, status
 
 
 def qr_text(value: str) -> str:
@@ -47,15 +54,31 @@ def qr_text(value: str) -> str:
 
 
 def build_registry() -> Registry:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Empty ephemeral storage gets one complete synthetic seed. Existing storage is validated
+    # and reused; partial/corrupt storage raises instead of being silently deleted.
+    initialize_runtime(DATA_DIR)
     reg = Registry(str(DATA_DIR / "dolil.db"), str(DATA_DIR / "keys"))
     for office, role in DEFAULT_OFFICES.items():
         reg.ensure_office(office, role)
     return reg
 
 
-def create_app(registry: Registry | None = None) -> Starlette:
+def create_app(registry: Registry | None = None, *, admin_password: str | None = None,
+               session_secret: str | None = None, secure_cookies: bool | None = None,
+               public_url: str | None = None) -> Starlette:
     reg = registry or build_registry()
+    admin_password = os.environ.get("DOLIL_ADMIN_PASSWORD") if admin_password is None else admin_password
+    session_secret = session_secret or os.environ.get("DOLIL_SESSION_SECRET") or secrets.token_urlsafe(32)
+    if secure_cookies is None:
+        secure_cookies = bool(os.environ.get("RENDER_EXTERNAL_URL"))
+
+    def require_admin(request: Request) -> None:
+        if not admin_password or request.session.get("demo_admin") is not True:
+            raise DemoAuthError("AUTH_REQUIRED", "demo administrator login required", 401)
+        supplied = request.headers.get("x-csrf-token", "")
+        expected = request.session.get("csrf", "")
+        if not supplied or not expected or not secrets.compare_digest(supplied, expected):
+            raise DemoAuthError("CSRF_FAILED", "missing or invalid CSRF token", 403)
 
     async def body(request: Request) -> dict:
         try:
@@ -76,7 +99,8 @@ def create_app(registry: Registry | None = None) -> Starlette:
             raise Rejected("INVALID_INPUT", f"{name} must be an integer")
 
     def verify_link(request: Request, payload: str) -> str:
-        base = os.environ.get("DOLIL_PUBLIC_URL") or str(request.base_url)
+        base = (public_url or os.environ.get("DOLIL_PUBLIC_URL") or
+                os.environ.get("RENDER_EXTERNAL_URL") or str(request.base_url))
         return f"{base.rstrip('/')}/v?q={quote(payload, safe='')}"
 
     async def index(request: Request):
@@ -88,12 +112,39 @@ def create_app(registry: Registry | None = None) -> Starlette:
         })
 
     async def health(request: Request):
-        return JSONResponse({"ok": True, "log_size": len(reg.log)})
+        # Read-only: Render can call this repeatedly without changing the ledger or keys.
+        return JSONResponse({"ok": True, "mode": "competition-demo", "log_size": len(reg.log)})
+
+    async def admin_status(request: Request):
+        authenticated = bool(admin_password and request.session.get("demo_admin") is True)
+        return JSONResponse({
+            "authenticated": authenticated,
+            "csrf": request.session.get("csrf") if authenticated else None,
+            "login_url": "/admin/login",
+        })
+
+    async def admin_session(request: Request):
+        if not admin_password:
+            raise DemoAuthError("AUTH_UNAVAILABLE", "demo administrator login is not configured", 503)
+        b = await body(request)
+        supplied = str(b.get("password", ""))
+        if not supplied or not secrets.compare_digest(supplied, admin_password):
+            raise DemoAuthError("BAD_CREDENTIALS", "invalid demo administrator credential", 401)
+        request.session.clear()
+        request.session["demo_admin"] = True
+        request.session["csrf"] = secrets.token_urlsafe(32)
+        return JSONResponse({"authenticated": True, "csrf": request.session["csrf"]})
+
+    async def admin_logout(request: Request):
+        require_admin(request)
+        request.session.clear()
+        return JSONResponse({"authenticated": False})
 
     async def keys(request: Request):
         return JSONResponse(reg.public_keys())
 
     async def create_office(request: Request):
+        require_admin(request)
         b = await body(request)
         if b.get("role") not in ("sub_registry", "ac_land"):
             raise Rejected("INVALID_INPUT", "role must be sub_registry or ac_land")
@@ -102,9 +153,11 @@ def create_app(registry: Registry | None = None) -> Starlette:
         return JSONResponse(reg.ensure_office(str(b["office_id"]), b["role"]), status_code=201)
 
     async def baselines(request: Request):
+        require_admin(request)
         return JSONResponse(reg.add_baseline(await body(request)), status_code=201)
 
     async def deeds(request: Request):
+        require_admin(request)
         return JSONResponse(reg.register_deed(await body(request)), status_code=201)
 
     async def deed(request: Request):
@@ -143,6 +196,7 @@ def create_app(registry: Registry | None = None) -> Starlette:
         return JSONResponse(reg.verify(deed_id=deed_id, qr=qr, document=doc))
 
     async def mutations(request: Request):
+        require_admin(request)
         return JSONResponse(reg.add_mutation(await body(request)), status_code=201)
 
     async def flags(request: Request):
@@ -195,6 +249,10 @@ def create_app(registry: Registry | None = None) -> Starlette:
     async def on_rejected(request: Request, exc: Rejected):
         return JSONResponse(exc.as_dict(), status_code=STATUS.get(exc.code, 400))
 
+    async def on_auth_error(request: Request, exc: DemoAuthError):
+        return JSONResponse({"error": exc.code, "message": exc.message, "login_url": "/admin/login"},
+                            status_code=exc.status)
+
     routes = [
         Route("/", page("index.html")),
         Route("/register", page("register.html")),
@@ -202,6 +260,10 @@ def create_app(registry: Registry | None = None) -> Starlette:
         Route("/deed", page("deed.html")),
         Route("/mutation", page("mutation.html")),
         Route("/guide", page("guide.html")),
+        Route("/admin/login", page("admin.html")),
+        Route("/admin/status", admin_status),
+        Route("/admin/session", admin_session, methods=["POST"]),
+        Route("/admin/logout", admin_logout, methods=["POST"]),
         Route("/api", index),
         Route("/health", health),
         Route("/keys", keys),
@@ -226,8 +288,9 @@ def create_app(registry: Registry | None = None) -> Starlette:
     ]
     app = Starlette(
         routes=routes,
-        exception_handlers={Rejected: on_rejected},
-        middleware=[Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])],
+        exception_handlers={Rejected: on_rejected, DemoAuthError: on_auth_error},
+        middleware=[Middleware(SessionMiddleware, secret_key=session_secret, session_cookie="dolil_demo_session",
+                               same_site="strict", https_only=secure_cookies, max_age=8 * 60 * 60)],
     )
     app.state.registry = reg
     return app

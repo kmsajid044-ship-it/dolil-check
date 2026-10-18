@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>দলিল চেক · ডেমো অ্যাডমিন</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%232e3c93'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="description" content="দলিল চেক প্রতিযোগিতা ডেমোর অ্যাডমিন লগইন।">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&text=%E0%A7%A6%E0%A7%A7%E0%A7%A8%E0%A7%A9%E0%A7%AA%E0%A7%AB%E0%A7%AC%E0%A7%AD%E0%A7%AE%E0%A7%AF&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script>try{const t=localStorage.getItem("dolil-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main id="main"><div class="wrap">
+  <header class="pagehead"><div class="enter">
+    <div class="office">প্রেজেন্টিং টিমের জন্য</div>
+    <h1>ডেমো অ্যাডমিন</h1>
+    <p class="lead">শুধু অনুমোদিত দল নতুন দলিল, বেইসলাইন বা নামজারি যোগ করতে পারে। পাসওয়ার্ডটি এই ব্রাউজারে সংরক্ষণ করা হয় না।</p>
+  </div></header>
+
+  <section class="card" style="max-width:560px" id="panel">
+    <form id="login" autocomplete="off">
+      <div class="field"><label for="password">ডেমো অ্যাডমিন পাসওয়ার্ড</label>
+        <input id="password" type="password" autocomplete="current-password" required></div>
+      <button type="submit" id="go">লগইন করুন</button>
+    </form>
+    <div id="out"></div>
+  </section>
+</div></main>
+<script src="/static/app.js"></script>
+<script>
+renderHeader("admin");
+const panel = $("#panel"), form = $("#login"), out = $("#out");
+
+async function showStatus() {
+  const r = await fetch("/admin/status", { credentials: "same-origin" });
+  const status = await r.json();
+  if (!status.authenticated) return;
+  form.classList.add("hidden");
+  out.innerHTML = `<div class="verdict good"><div class="say"><p class="bn">ডেমো অ্যাডমিন লগইন করা আছে</p>
+    <p class="en">এখন দলিল নিবন্ধন ও নামজারি করা যাবে। পাসওয়ার্ড কখনো frontend-এ রাখা হয় না।</p>
+    <div class="buttons"><a class="btn" href="/register">দলিল নিবন্ধন</a><a class="btn ghost" href="/mutation">নামজারি</a>
+    <button type="button" class="danger" id="logout">লগআউট</button></div></div></div>`;
+  $("#logout").onclick = async () => {
+    const r = await api("/admin/logout", {});
+    if (r.ok) location.reload(); else renderError(out, r.data);
+  };
+}
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  $("#go").disabled = true;
+  const r = await fetch("/admin/session", { method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: $("#password").value }) });
+  let data; try { data = await r.json(); } catch { data = { error: "BAD_RESPONSE", message: `HTTP ${r.status}` }; }
+  $("#go").disabled = false;
+  $("#password").value = "";
+  if (!r.ok) renderError(out, data); else await showStatus();
+};
+showStatus();
+</script>
+</body>
+</html>

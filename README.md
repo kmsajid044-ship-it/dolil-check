@@ -90,6 +90,8 @@ The application does not automatically load `.env`; export any values you use in
 | --- | --- | --- |
 | `DOLIL_DATA` | `<repo>/data/runtime` | Runtime SQLite database, private office keys and demo output |
 | `DOLIL_PUBLIC_URL` | Current request base URL | Public base URL encoded into newly generated QR links |
+| `DOLIL_ADMIN_PASSWORD` | unset | Private presenting-team credential; writes are disabled when unset |
+| `DOLIL_SESSION_SECRET` | random per process | Signs HttpOnly demo-admin sessions; set explicitly for deployment |
 | `DOLIL_NO_APP` | unset | Set to `1` only for tests/imports that create their own app |
 
 ## Database initialization and synthetic seed
@@ -107,6 +109,8 @@ python -m app.seed --reset
 ```
 
 `--reset` deletes and recreates `DOLIL_DATA`; do not run it against data you need to preserve. Restart the server after reseeding so it reloads the new database and keys.
+
+When the web application starts against a completely empty `DOLIL_DATA`, it creates one complete synthetic seed automatically. It builds the database, keys and demo documents together in a temporary sibling directory, verifies them, and then moves them into place. An existing complete runtime is validated and reused. A partial or corrupt runtime causes startup to fail clearly and is never silently reset.
 
 ## Run
 
@@ -131,6 +135,12 @@ docker compose up --build
 ```
 
 The container initializes synthetic data only when its persistent volume has no database.
+
+## Free Render competition demo
+
+The repository includes a free-instance `render.yaml`. It runs the existing Starlette UI and API as one Python web service, binds Uvicorn to Render's `$PORT`, uses one worker for SQLite, and stores the disposable runtime under `/tmp/dolil-check-runtime`. Public reads and verification remain open; office creation, baselines, deed registration and mutation require a private demo-administrator session and CSRF token.
+
+See [RENDER_DEPLOY.md](RENDER_DEPLOY.md) for exact dashboard values, private environment-variable setup, smoke tests and cold-start/ephemeral-storage limitations. No persistent disk, paid service or keep-alive traffic is used.
 
 ## Web pages
 
